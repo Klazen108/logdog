@@ -1,0 +1,1 @@
+docker run --rm --net=host -it -v ${PWD}:/app python:3 bash -c 'cd /app && python logdog.py > test'

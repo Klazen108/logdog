@@ -1,0 +1,15 @@
+{
+    "download_folder":"./logs",
+    "skip_download":false,
+    "log_files":[
+        {"server":"mi2svc","file":"SystemOut.log"},
+        {"server":"mi2svc2","file":"SystemOut.log"},
+        {"server":"mi2svc3","file":"SystemOut.log"},
+        {"server":"mi2svc4","file":"SystemOut.log"}
+    ],
+    "log_server_url":"http://10.127.7.79:9083/logview/downloadservlet?profile=AppServers&folder={folder}&filename={filename}",
+    "default_regex":"",
+    "result_limit":10,
+    "download_new_files":true,
+    "group_by_thread":true
+}
