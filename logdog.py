@@ -6,24 +6,39 @@ import codecs
 import os
 import json
 from functools import reduce 
+import argparse
 
 filterregex = None
 numresults = 10
 groupbythread = True
+printlines = False
 
 config = {}
+
+mode = "java"
 
 def main():
   global filterregex
   global numresults
   global groupbythread
   global config
+  global mode
+  global printlines
 
-  if os.path.exists('config.json'):
-    with open('config.json') as f:
+  parser = argparse.ArgumentParser(description='Process and reduce Motion map files.')
+  parser.add_argument('-c', dest='config', action='store', default='config.json',
+                      help='specify path to a config file')
+
+  args = parser.parse_args()
+
+  if os.path.exists(args.config):
+    print('Using config file '+args.config)
+    with open(args.config) as f:
       config = json.load(f)
   else:
-    cf_out = open("sample.txt", "w")
+    if args.config:
+      print('No config file at '+args.config+' - creating default at ./config.json')
+    cf_out = open("config.json", "w")
     cf_out.write("""{
   "download_folder":"./logs",
   "skip_download":false,
@@ -33,6 +48,7 @@ def main():
     {"server":"mi2svc3","file":"SystemOut.log"},
     {"server":"mi2svc4","file":"SystemOut.log"}
   ],
+  "mode":"java",
   "log_server_url":"http://10.127.7.79:9083/logview/downloadservlet?profile=AppServers&folder={folder}&filename={filename}",
   "default_regex":"",
   "result_limit":10,
@@ -45,9 +61,13 @@ def main():
   print('========================================')
 
   filterstr = config.get("default_regex","")
+  if filterstr.strip():
+    filterregex = re.compile(filterstr.strip())
   numresults = config.get("result_limit",10)
   dodownload = config.get("download_new_files",True)
   groupbythread = config.get("group_by_thread",True)
+  printlines = config.get("print_lines",False)
+  mode = config.get("mode","java")
 
   if sys.stdout.isatty():
     filterstr = input(f"(Optional) Enter a filter regular expression ({filterstr}): ")
@@ -69,6 +89,10 @@ def main():
     groupbythread = input(f"Group messages by thread? [Y/n] ({groupbythread}): ")
     if groupbythread.strip().upper() == "N":
       groupbythread = False
+        
+    printlinesstr = input(f"Print individual lines? [y/N] ({printlines}): ")
+    if printlinesstr.strip().upper() == "N":
+      printlines = False
   
   files = []
   for logfile in config['log_files']:
@@ -89,13 +113,19 @@ def main():
   # read from files
   logmap = {}
   for streamsaver in [x for x in streamsavers if x.ready]:
-    print(f'Consuming {streamsaver.filename}...',flush=True)
+    if not printlines:
+      print(f'Consuming {streamsaver.filename}...',flush=True)
     while streamsaver.ready:
       getLogEntry(streamsaver)
 
       # filter out non-matching entries
       if filterregex and not linesContain(streamsaver.lastlog.lines,filterregex):
         continue
+
+      if printlines:
+        for line in streamsaver.lastlog.lines:
+          print(line.replace('\r\n',''))
+        #print(streamsaver.lastlog.lines[0].replace('\r\n',''))
       
       # add one to number of times seen
       logcnt = logmap.get(streamsaver.lastlog.hash,None)
@@ -184,40 +214,44 @@ tstimeregex = re.compile('^\d?\d\/\d?\d\/\d?\d\s+(\d?\d):(\d?\d):(\d?\d):(\d?\d?
 # The line is considered part of the same log if the thread id is the same
 # and the timestamp has increased by at most one-thousandth of a second.
 def isSameEntry(logline,currentThreadId,currentTimestamp):
-  global groupbythread
-  
-  parsedline = None
-  try:
-    parsedline = parseLogline(logline)
-  except ValueError:
-    return currentTimestamp
+  if mode == "java":
+    global groupbythread
+    
+    parsedline = None
+    try:
+      parsedline = parseLogline(logline)
+    except ValueError:
+      return currentTimestamp
 
-  if not groupbythread:
-    return False
-  
-  #get numeric value of this line
-  ts = parsedline.timestamp
-  tsnm = tstimeregex.match(ts)
-  if not tsnm:
-    raise ValueError("Invalid timestamp: "+ts)
-  tsnumeric = int(tsnm[1]+tsnm[2]+tsnm[3]+tsnm[4])
-  
-  #get numeric value of current line
-  tsnmc = tstimeregex.match(currentTimestamp)
-  if not tsnmc:
-    raise ValueError("Invalid timestamp: "+currentTimestamp)
-  tscnumeric = int(tsnmc[1]+tsnmc[2]+tsnmc[3]+tsnmc[4])
+    if not groupbythread:
+      return False
+    
+    #get numeric value of this line
+    ts = parsedline.timestamp
+    tsnm = tstimeregex.match(ts)
+    if not tsnm:
+      raise ValueError("Invalid timestamp: "+ts)
+    tsnumeric = int(tsnm[1]+tsnm[2]+tsnm[3]+tsnm[4])
+    
+    #get numeric value of current line
+    tsnmc = tstimeregex.match(currentTimestamp)
+    if not tsnmc:
+      raise ValueError("Invalid timestamp: "+currentTimestamp)
+    tscnumeric = int(tsnmc[1]+tsnmc[2]+tsnmc[3]+tsnmc[4])
 
-  # isStackTrace = 'SystemErr     R 	at' in logline
-  # isStackTrace = isStackTrace or 'SystemErr     R Caused by' in logline
+    # isStackTrace = 'SystemErr     R 	at' in logline
+    # isStackTrace = isStackTrace or 'SystemErr     R Caused by' in logline
 
-  sameTime = tsnumeric <= tscnumeric+1
-  sameThread = parsedline.threadid == currentThreadId
-  # if isStackTrace or (sameTime and sameThread):
-  if sameTime and sameThread:
-    return ts
-  else:
-    return False
+    sameTime = tsnumeric <= tscnumeric+1
+    sameThread = parsedline.threadid == currentThreadId
+    # if isStackTrace or (sameTime and sameThread):
+    if sameTime and sameThread:
+      return ts
+    else:
+      return False
+  elif mode == "node":
+    # not a good indicator, but best we've got. Need better node logs
+    return logline.startswith(" ")
 
 def getLogEntry(streamsaver):
   # assume current lastline is the start of a new log entry
@@ -271,30 +305,41 @@ def getFileReady(streamsaver):
       streamsaver.ready = False
       print('No log content detected.')
       return False
-    if loglineregex.match(line):
+    if isLogLine(line):
       streamsaver.lastline = line
       streamsaver.timestamp = parseLogline(line).timestamp
       streamsaver.ready = True
       print('Ready at line '+str(i)+".")
       return True
 
+def isLogLine(logline):
+  if mode == "java":
+    return loglineregex.match(logline)
+  elif mode == "node":
+    return True
+
 loglineregex = re.compile('^\[(\d[^\]]+)\]\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)$')
 def parseLogline(logline):
-  match = loglineregex.match(logline)
-  if match:
-    return ParsedLine(match.groups())
-  else:
-    raise ValueError('This line was of an unexpected format:\n'+logline)
+  if mode == "java":
+    match = loglineregex.match(logline)
+    if match:
+      return ParsedLine(match.groups())
+    else:
+      raise ValueError('This line was of an unexpected format:\n'+logline)
+  elif mode == "node":
+    return ParsedLine(['','','','',logline])
 
 
 def getLog(folder,filename,skipdownload):
   if not os.path.exists(config['download_folder']):
       os.makedirs(config['download_folder'])
 
+  fl = filename
+  filename = os.path.join(config['download_folder'],f'{folder}-{filename}')
   if not skipdownload:
     # blmotqaecowas01 wasn't working from container, so replaced with ip
-    url = config['log_server_url'].format(folder=folder, filename=filename)
-    filename = os.path.join(config['download_folder'],f'{folder}-{filename}')
+    url = config['log_server_url'].format(folder=folder, filename=fl)
+    print('requesting '+url)
     urllib.request.urlretrieve(url, filename)
   return filename
 

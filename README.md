@@ -1,3 +1,5 @@
+# Logdog
+
 **Logdog** Is a utility by Chuck Murphy for quickly retrieving log files from the Motion servers and sorting the results, to see the most common messages being printed to the console.
 
 - 2020-07-16 DP072885
@@ -50,7 +52,7 @@ Logdog settings are available in `config.json`. Commonly changed settings are pr
         {"server":"mi2svc3","file":"SystemOut.log"},
         {"server":"mi2svc4","file":"SystemOut.log"}
     ],
-    "log_server_url":"http://10.127.7.79:9083/logview/downloadservlet?profile=AppServers&folder={folder}&filename={filename}",
+    "log_server_url":"http://logviewer-host/logview/downloadservlet?profile=AppServers&folder={folder}&filename={filename}",
     "default_regex":"",
     "result_limit":10,
     "download_new_files":true,
