@@ -1,15 +1,25 @@
 {
     "download_folder":"./logs",
-    "skip_download":false,
+
+    "log_files_node":[
+        {"server":"NodejsProd09","file":"server-mi-out.log"},
+        {"server":"NodejsProd10","file":"server-mi-out.log"},
+        {"server":"NodejsProd11","file":"server-mi-out.log"},
+        {"server":"NodejsProd12","file":"server-mi-out.log"}
+    ],
     "log_files":[
-        {"server":"mi2svc","file":"SystemOut.log"},
+        {"server":"mi2svc" ,"file":"SystemOut.log"},
         {"server":"mi2svc2","file":"SystemOut.log"},
         {"server":"mi2svc3","file":"SystemOut.log"},
         {"server":"mi2svc4","file":"SystemOut.log"}
     ],
+
+    "mode":"java",
     "log_server_url":"http://10.127.7.79:9083/logview/downloadservlet?profile=AppServers&folder={folder}&filename={filename}",
     "default_regex":"",
-    "result_limit":10,
+    "default_regex_exclude":"^((?!taxonomy document for taxonomy name).)*$",
+    "result_limit":100,
     "download_new_files":true,
-    "group_by_thread":true
+    "group_by_thread":true,
+    "print_lines":false
 }

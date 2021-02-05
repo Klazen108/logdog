@@ -28,9 +28,7 @@ def main():
   parser = argparse.ArgumentParser(description='Process and reduce Motion map files.')
   parser.add_argument('-c', dest='config', action='store', default='config.json',
                       help='specify path to a config file')
-
   args = parser.parse_args()
-
   if os.path.exists(args.config):
     print('Using config file '+args.config)
     with open(args.config) as f:
@@ -112,6 +110,7 @@ def main():
 
   # read from files
   logmap = {}
+  timemap = {}
   for streamsaver in [x for x in streamsavers if x.ready]:
     if not printlines:
       print(f'Consuming {streamsaver.filename}...',flush=True)
@@ -136,6 +135,24 @@ def main():
       else:
         logcnt.count = logcnt.count + 1
       logmap[streamsaver.lastlog.hash] = logcnt
+
+      #count errors by hour+minute
+      tsnm = tstimeregex.match(streamsaver.lastlog.timestamp)
+      if tsnm:
+        ts = tsnm[1]+','+tsnm[2]
+        tm = timemap.get(ts)
+        if not tm:
+          timemap[ts] = 1
+        else:
+          timemap[ts] = tm+1
+
+  print('Writing counts by timestamp...',flush=True)
+  cf_out = open("counts.csv", "w")
+  cf_out.write('hour,minute,count\n')
+  for key, value in timemap.items():
+    cf_out.write(key+','+str(value)+'\n')
+  cf_out.close()
+  print('Counts written to counts.csv',flush=True)
 
   print('Sorting...',flush=True)
   sortedlogs = list(logmap.values())
